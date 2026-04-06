@@ -1,0 +1,626 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>照片拼图 - 微信朋友圈拼图工具</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #1a1a2e;
+            color: #eee;
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container {
+            max-width: 500px;
+            margin: 0 auto;
+        }
+        h1 {
+            text-align: center;
+            font-size: 1.5rem;
+            margin-bottom: 20px;
+            color: #fff;
+        }
+        .tabs {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 20px;
+        }
+        .tab {
+            flex: 1;
+            padding: 12px;
+            background: #16213e;
+            border: none;
+            border-radius: 8px;
+            color: #888;
+            cursor: pointer;
+            font-size: 0.95rem;
+            transition: all 0.2s;
+        }
+        .tab.active {
+            background: #e94560;
+            color: #fff;
+        }
+        .panel {
+            display: none;
+            background: #16213e;
+            border-radius: 12px;
+            padding: 20px;
+        }
+        .panel.active {
+            display: block;
+        }
+        .upload-area {
+            border: 2px dashed #e94560;
+            border-radius: 12px;
+            padding: 40px 20px;
+            text-align: center;
+            cursor: pointer;
+            margin-bottom: 16px;
+            transition: background 0.2s;
+        }
+        .upload-area:hover {
+            background: rgba(233, 69, 96, 0.1);
+        }
+        .upload-area p {
+            color: #888;
+            font-size: 0.9rem;
+        }
+        .upload-area .hint {
+            font-size: 0.8rem;
+            color: #666;
+            margin-top: 8px;
+        }
+        .preview-area {
+            display: none;
+            margin-bottom: 16px;
+        }
+        .preview-area.has-images {
+            display: block;
+        }
+        .photo-grid {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-bottom: 12px;
+        }
+        .photo-item {
+            position: relative;
+            width: calc(33.333% - 6px);
+            aspect-ratio: 1;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        .photo-item img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        .photo-item .remove {
+            position: absolute;
+            top: 4px;
+            right: 4px;
+            width: 24px;
+            height: 24px;
+            background: rgba(0,0,0,0.6);
+            border: none;
+            border-radius: 50%;
+            color: #fff;
+            cursor: pointer;
+            font-size: 14px;
+            line-height: 1;
+        }
+        .options {
+            margin-bottom: 16px;
+        }
+        .option-label {
+            font-size: 0.85rem;
+            color: #888;
+            margin-bottom: 8px;
+        }
+        .option-row {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+        .option-btn {
+            padding: 8px 16px;
+            background: #1a1a2e;
+            border: 1px solid #333;
+            border-radius: 6px;
+            color: #888;
+            cursor: pointer;
+            font-size: 0.85rem;
+            transition: all 0.2s;
+        }
+        .option-btn.active {
+            background: #e94560;
+            border-color: #e94560;
+            color: #fff;
+        }
+        .action-row {
+            display: flex;
+            gap: 10px;
+        }
+        .btn {
+            flex: 1;
+            padding: 14px;
+            border: none;
+            border-radius: 8px;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: opacity 0.2s;
+        }
+        .btn:hover {
+            opacity: 0.9;
+        }
+        .btn-primary {
+            background: #e94560;
+            color: #fff;
+        }
+        .btn-secondary {
+            background: #333;
+            color: #fff;
+        }
+        .canvas-container {
+            display: none;
+            margin-top: 20px;
+        }
+        .canvas-container.show {
+            display: block;
+        }
+        canvas {
+            width: 100%;
+            border-radius: 8px;
+        }
+        #resultCanvas {
+            max-width: 100%;
+        }
+        .template-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 8px;
+            margin-top: 12px;
+        }
+        .template-item {
+            aspect-ratio: 1;
+            background: #1a1a2e;
+            border: 2px solid #333;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.7rem;
+            color: #666;
+            text-align: center;
+            padding: 4px;
+        }
+        .template-item.active {
+            border-color: #e94560;
+            color: #fff;
+        }
+        .template-item:hover {
+            border-color: #e94560;
+        }
+        .hidden-input {
+            display: none;
+        }
+        .drag-hint {
+            font-size: 0.75rem;
+            color: #666;
+            text-align: center;
+            margin-top: 8px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>照片拼图</h1>
+
+        <div class="tabs">
+            <button class="tab active" data-tab="vertical">竖向拼图</button>
+            <button class="tab" data-tab="ninegrid">九宫格破窗</button>
+        </div>
+
+        <!-- 竖向拼图面板 -->
+        <div class="panel active" id="panel-vertical">
+            <div class="upload-area" id="upload-vertical">
+                <p>点击上传照片</p>
+                <p class="hint">支持 2-6 张照片垂直拼接</p>
+            </div>
+
+            <div class="preview-area" id="preview-vertical">
+                <div class="photo-grid" id="photo-grid-vertical"></div>
+                <p class="drag-hint">点击图片可删除</p>
+            </div>
+
+            <div class="options">
+                <div class="option-label">过渡效果</div>
+                <div class="option-row">
+                    <button class="option-btn active" data-effect="gradient">渐变叠加</button>
+                    <button class="option-btn" data-effect="fade">淡入淡出</button>
+                    <button class="option-btn" data-effect="blur">模糊过渡</button>
+                </div>
+            </div>
+
+            <div class="action-row">
+                <button class="btn btn-secondary" id="clear-vertical">清空</button>
+                <button class="btn btn-primary" id="generate-vertical">生成拼图</button>
+            </div>
+
+            <div class="canvas-container" id="canvas-vertical">
+                <canvas id="resultCanvasVertical"></canvas>
+                <button class="btn btn-primary" id="download-vertical" style="margin-top:12px;width:100%;">下载图片</button>
+            </div>
+        </div>
+
+        <!-- 九宫格破窗面板 -->
+        <div class="panel" id="panel-ninegrid">
+            <div class="upload-area" id="upload-ninegrid">
+                <p>点击上传照片</p>
+                <p class="hint">请上传 9 张照片</p>
+            </div>
+
+            <div class="preview-area" id="preview-ninegrid">
+                <div class="photo-grid" id="photo-grid-ninegrid"></div>
+            </div>
+
+            <div class="options">
+                <div class="option-label">选择大图位置</div>
+                <div class="option-row">
+                    <button class="option-btn active" data-bigimg="0">第1张为大图</button>
+                    <button class="option-btn" data-bigimg="1">第2张为大图</button>
+                </div>
+            </div>
+
+            <div class="action-row">
+                <button class="btn btn-secondary" id="clear-ninegrid">清空</button>
+                <button class="btn btn-primary" id="generate-ninegrid">生成拼图</button>
+            </div>
+
+            <div class="canvas-container" id="canvas-ninegrid">
+                <canvas id="resultCanvasNinegrid"></canvas>
+                <button class="btn btn-primary" id="download-ninegrid" style="margin-top:12px;width:100%;">下载图片</button>
+            </div>
+        </div>
+    </div>
+
+    <input type="file" id="fileInputVertical" class="hidden-input" accept="image/*" multiple>
+    <input type="file" id="fileInputNinegrid" class="hidden-input" accept="image/*" multiple>
+
+    <script>
+        // 状态管理
+        const state = {
+            vertical: {
+                photos: [],
+                effect: 'gradient'
+            },
+            ninegrid: {
+                photos: [],
+                bigImgIndex: 0
+            }
+        };
+
+        // DOM 元素
+        const els = {
+            tabs: document.querySelectorAll('.tab'),
+            panels: document.querySelectorAll('.panel'),
+            uploadVertical: document.getElementById('upload-vertical'),
+            uploadNinegrid: document.getElementById('upload-ninegrid'),
+            fileInputVertical: document.getElementById('fileInputVertical'),
+            fileInputNinegrid: document.getElementById('fileInputNinegrid'),
+            previewVertical: document.getElementById('preview-vertical'),
+            previewNinegrid: document.getElementById('preview-ninegrid'),
+            photoGridVertical: document.getElementById('photo-grid-vertical'),
+            photoGridNinegrid: document.getElementById('photo-grid-ninegrid'),
+            canvasVertical: document.getElementById('canvas-vertical'),
+            canvasNinegrid: document.getElementById('canvas-ninegrid'),
+            resultCanvasVertical: document.getElementById('resultCanvasVertical'),
+            resultCanvasNinegrid: document.getElementById('resultCanvasNinegrid')
+        };
+
+        // 标签页切换
+        els.tabs.forEach(tab => {
+            tab.addEventListener('click', () => {
+                els.tabs.forEach(t => t.classList.remove('active'));
+                els.panels.forEach(p => p.classList.remove('active'));
+                tab.classList.add('active');
+                document.getElementById('panel-' + tab.dataset.tab).classList.add('active');
+            });
+        });
+
+        // 文件上传
+        els.uploadVertical.addEventListener('click', () => els.fileInputVertical.click());
+        els.uploadNinegrid.addEventListener('click', () => els.fileInputNinegrid.click());
+
+        els.fileInputVertical.addEventListener('change', e => handleFiles(e, 'vertical'));
+        els.fileInputNinegrid.addEventListener('change', e => handleFiles(e, 'ninegrid'));
+
+        // 拖拽上传
+        ['uploadVertical', 'uploadNinegrid'].forEach(id => {
+            const el = els[id];
+            el.addEventListener('dragover', e => {
+                e.preventDefault();
+                el.style.background = 'rgba(233, 69, 96, 0.2)';
+            });
+            el.addEventListener('dragleave', () => {
+                el.style.background = '';
+            });
+            el.addEventListener('drop', e => {
+                e.preventDefault();
+                el.style.background = '';
+                const files = Array.from(e.dataTransfer.files).filter(f => f.type.startsWith('image/'));
+                if (files.length > 0) {
+                    handleFilesArray(files, id === 'uploadVertical' ? 'vertical' : 'ninegrid');
+                }
+            });
+        });
+
+        function handleFiles(e, type) {
+            const files = Array.from(e.target.files);
+            handleFilesArray(files, type);
+        }
+
+        function handleFilesArray(files, type) {
+            const maxPhotos = type === 'vertical' ? 6 : 9;
+            const current = state[type].photos;
+
+            files.slice(0, maxPhotos - current.length).forEach(file => {
+                const reader = new FileReader();
+                reader.onload = e => {
+                    const img = new Image();
+                    img.onload = () => {
+                        if (current.length < maxPhotos) {
+                            current.push(img);
+                            updatePreview(type);
+                        }
+                    };
+                    img.src = e.target.result;
+                };
+                reader.readAsDataURL(file);
+            });
+        }
+
+        function updatePreview(type) {
+            const photos = state[type].photos;
+            const grid = type === 'vertical' ? els.photoGridVertical : els.photoGridNinegrid;
+            const preview = type === 'vertical' ? els.previewVertical : els.previewNinegrid;
+
+            grid.innerHTML = '';
+            photos.forEach((img, i) => {
+                const item = document.createElement('div');
+                item.className = 'photo-item';
+                item.innerHTML = `
+                    <img src="${img.src}" alt="照片${i + 1}">
+                    <button class="remove" data-index="${i}">×</button>
+                `;
+                grid.appendChild(item);
+            });
+
+            preview.classList.toggle('has-images', photos.length > 0);
+
+            // 删除按钮
+            grid.querySelectorAll('.remove').forEach(btn => {
+                btn.addEventListener('click', e => {
+                    e.stopPropagation();
+                    const idx = parseInt(btn.dataset.index);
+                    state[type].photos.splice(idx, 1);
+                    updatePreview(type);
+                });
+            });
+        }
+
+        // 过渡效果选择
+        document.querySelectorAll('[data-effect]').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('[data-effect]').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                state.vertical.effect = btn.dataset.effect;
+            });
+        });
+
+        // 大图位置选择
+        document.querySelectorAll('[data-bigimg]').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('[data-bigimg]').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                state.ninegrid.bigImgIndex = parseInt(btn.dataset.bigimg);
+            });
+        });
+
+        // 清空按钮
+        document.getElementById('clear-vertical').addEventListener('click', () => {
+            state.vertical.photos = [];
+            updatePreview('vertical');
+            els.canvasVertical.classList.remove('show');
+        });
+        document.getElementById('clear-ninegrid').addEventListener('click', () => {
+            state.ninegrid.photos = [];
+            updatePreview('ninegrid');
+            els.canvasNinegrid.classList.remove('show');
+        });
+
+        // 生成竖向拼图
+        document.getElementById('generate-vertical').addEventListener('click', () => {
+            const photos = state.vertical.photos;
+            if (photos.length < 2) {
+                alert('请至少上传 2 张照片');
+                return;
+            }
+
+            const canvas = els.resultCanvasVertical;
+            const ctx = canvas.getContext('2d');
+            const width = photos[0].width;
+            const totalHeight = photos.reduce((sum, p) => sum + p.height, 0);
+
+            canvas.width = width;
+            canvas.height = totalHeight;
+
+            let y = 0;
+            const transitionHeight = 60;
+
+            photos.forEach((img, i) => {
+                if (i === 0) {
+                    ctx.drawImage(img, 0, y, width, img.height);
+                    y += img.height;
+                } else {
+                    // 计算缩放后的高度，保持宽度一致
+                    const scaledHeight = (img.height / img.width) * width;
+                    const startY = y;
+
+                    if (state.vertical.effect === 'gradient') {
+                        // 渐变叠加
+                        ctx.save();
+                        ctx.globalCompositeOperation = 'source-over';
+                        ctx.drawImage(img, 0, y, width, scaledHeight);
+
+                        // 渐变遮罩
+                        const gradient = ctx.createLinearGradient(0, startY - transitionHeight, 0, startY + 20);
+                        gradient.addColorStop(0, 'rgba(0,0,0,0)');
+                        gradient.addColorStop(1, 'rgba(0,0,0,1)');
+                        ctx.fillStyle = gradient;
+                        ctx.fillRect(0, startY - transitionHeight, width, transitionHeight);
+
+                        const gradient2 = ctx.createLinearGradient(0, startY + 20, 0, startY + transitionHeight + 20);
+                        gradient2.addColorStop(0, 'rgba(0,0,0,1)');
+                        gradient2.addColorStop(1, 'rgba(0,0,0,0)');
+                        ctx.fillStyle = gradient2;
+                        ctx.fillRect(0, startY + 20, width, transitionHeight);
+                        ctx.restore();
+
+                        y += scaledHeight;
+                    } else if (state.vertical.effect === 'fade') {
+                        // 淡入淡出
+                        ctx.save();
+                        ctx.globalAlpha = 0.3;
+                        ctx.fillStyle = '#1a1a2e';
+                        ctx.fillRect(0, y - 30, width, 60);
+                        ctx.globalAlpha = 1;
+                        ctx.drawImage(img, 0, y, width, scaledHeight);
+                        ctx.restore();
+                        y += scaledHeight;
+                    } else if (state.vertical.effect === 'blur') {
+                        // 模糊过渡 - 用多次半透明绘制模拟
+                        ctx.save();
+                        for (let b = 0; b < 5; b++) {
+                            ctx.globalAlpha = 0.15;
+                            ctx.filter = `blur(${b * 2}px)`;
+                            ctx.drawImage(img, -b * 2, y, width + b * 4, scaledHeight);
+                        }
+                        ctx.filter = 'none';
+                        ctx.globalAlpha = 1;
+                        ctx.drawImage(img, 0, y, width, scaledHeight);
+                        ctx.restore();
+                        y += scaledHeight;
+                    }
+                }
+            });
+
+            els.canvasVertical.classList.add('show');
+        });
+
+        // 生成九宫格破窗
+        document.getElementById('generate-ninegrid').addEventListener('click', () => {
+            const photos = state.ninegrid.photos;
+            if (photos.length !== 9) {
+                alert('请上传 exactly 9 张照片');
+                return;
+            }
+
+            const canvas = els.resultCanvasNinegrid;
+            const ctx = canvas.getContext('2d');
+
+            // 九宫格破窗布局比例（上大下小）
+            // 比例定义：按行分配高度百分比
+            const layout = [
+                // 第一行：上半部分，大图占2/3宽度，第二张占1/3
+                { x: 0, y: 0, w: 2/3, h: 1/3 },
+                { x: 2/3, y: 0, w: 1/3, h: 1/3 },
+                // 第二行：3-5 各占1/3宽度
+                { x: 0, y: 1/3, w: 1/3, h: 1/3 },
+                { x: 1/3, y: 1/3, w: 1/3, h: 1/3 },
+                { x: 2/3, y: 1/3, w: 1/3, h: 1/3 },
+                // 第三行：6-8 各占1/3宽度
+                { x: 0, y: 2/3, w: 1/3, h: 1/6 },
+                { x: 1/3, y: 2/3, w: 1/3, h: 1/6 },
+                { x: 2/3, y: 2/3, w: 1/3, h: 1/6 },
+                // 第四行：9 单独占一整行
+                { x: 0, y: 5/6, w: 1, h: 1/6 }
+            ];
+
+            // 如果选择第2张为大图，交换位置0和1
+            let photoOrder = [0, 1, 2, 3, 4, 5, 6, 7, 8];
+            if (state.ninegrid.bigImgIndex === 1) {
+                photoOrder = [1, 0, 2, 3, 4, 5, 6, 7, 8];
+            }
+
+            // 计算画布尺寸（基于第一张照片的比例）
+            const basePhoto = photos[0];
+            const baseRatio = basePhoto.width / basePhoto.height;
+
+            // 使用竖屏比例
+            const canvasWidth = 1080;
+            const canvasHeight = Math.round(canvasWidth / baseRatio * 1.5);
+
+            canvas.width = canvasWidth;
+            canvas.height = canvasHeight;
+
+            photoOrder.forEach((photoIdx, cellIdx) => {
+                const cell = layout[cellIdx];
+                const img = photos[photoIdx];
+
+                const sx = cell.x * canvasWidth;
+                const sy = cell.y * canvasHeight;
+                const sw = cell.w * canvasWidth;
+                const sh = cell.h * canvasHeight;
+
+                // 绘制时居中裁切
+                const imgRatio = img.width / img.height;
+                const cellRatio = sw / sh;
+
+                let drawX, drawY, drawW, drawH;
+                if (imgRatio > cellRatio) {
+                    // 图片更宽，以高度为准
+                    drawH = img.height;
+                    drawW = img.height * cellRatio;
+                    drawX = (img.width - drawW) / 2;
+                    drawY = 0;
+                } else {
+                    // 图片更高，以宽度为准
+                    drawW = img.width;
+                    drawH = img.width / cellRatio;
+                    drawX = 0;
+                    drawY = (img.height - drawH) / 2;
+                }
+
+                ctx.drawImage(img, drawX, drawY, drawW, drawH, sx, sy, sw, sh);
+            });
+
+            els.canvasNinegrid.classList.add('show');
+        });
+
+        // 下载功能
+        document.getElementById('download-vertical').addEventListener('click', () => {
+            const link = document.createElement('a');
+            link.download = 'vertical-collage.png';
+            link.href = els.resultCanvasVertical.toDataURL('image/png');
+            link.click();
+        });
+
+        document.getElementById('download-ninegrid').addEventListener('click', () => {
+            const link = document.createElement('a');
+            link.download = 'ninegrid-collage.png';
+            link.href = els.resultCanvasNinegrid.toDataURL('image/png');
+            link.click();
+        });
+    </script>
+</body>
+</html>
